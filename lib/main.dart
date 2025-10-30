@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'screens/monitor_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/tips_screen.dart';
 import 'state/monitor_state.dart';
 import 'theme.dart';
 
@@ -46,6 +47,7 @@ class _RootShellState extends State<RootShell> {
     final monitorState = context.watch<BabyMonitorState>();
     final screens = const [
       MonitorScreen(key: ValueKey('monitor')),
+      TipsScreen(key: ValueKey('tips')),
       SettingsScreen(key: ValueKey('settings')),
     ];
 
@@ -83,6 +85,11 @@ class _RootShellState extends State<RootShell> {
             icon: Icon(Icons.monitor_heart_outlined),
             selectedIcon: Icon(Icons.monitor_heart),
             label: 'Monitor',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.child_care_outlined),
+            selectedIcon: Icon(Icons.child_care),
+            label: 'Tips',
           ),
           NavigationDestination(
             icon: Icon(Icons.tune_outlined),

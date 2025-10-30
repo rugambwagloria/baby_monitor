@@ -368,7 +368,7 @@ class BabyMonitorState extends ChangeNotifier {
     for (final ScanResult result in results) {
       final String advName = result.advertisementData.advName;
       final String platformName = result.device.platformName;
-      final String? fallbackName = result.advertisementData.localName;
+      final String fallbackName = result.advertisementData.localName;
       final String name = advName.isNotEmpty
           ? advName
           : platformName.isNotEmpty
