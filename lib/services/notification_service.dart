@@ -11,6 +11,12 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
+  void Function(String actionId)? _actionHandler;
+
+  /// Register a handler that's invoked when the user taps an action button in a notification.
+  void setActionHandler(void Function(String actionId) handler) {
+    _actionHandler = handler;
+  }
   
   // Track last notification times for each type
   DateTime? _lastCryNotificationTime;
@@ -38,7 +44,13 @@ class NotificationService {
     await _notifications.initialize(
       settings,
       onDidReceiveNotificationResponse: (details) {
-        developer.log('Notification tapped: ${details.payload}', name: 'NotificationService');
+        developer.log('Notification tapped: ${details.payload} action=${details.actionId}', name: 'NotificationService');
+        try {
+          if (details.actionId != null && _actionHandler != null) {
+            _actionHandler!(details.actionId!);
+            return;
+          }
+        } catch (_) {}
       },
     );
 
@@ -92,6 +104,10 @@ class NotificationService {
       ongoing: true,
       autoCancel: false,
       category: AndroidNotificationCategory.alarm,
+      actions: <AndroidNotificationAction>[
+        AndroidNotificationAction('mute', 'Mute 30m'),
+        AndroidNotificationAction('open', 'Open app'),
+      ],
     );
 
     const iosDetails = DarwinNotificationDetails(
@@ -158,6 +174,9 @@ class NotificationService {
       priority: Priority.high,
       playSound: true,
       enableVibration: true,
+      actions: <AndroidNotificationAction>[
+        AndroidNotificationAction('mute', 'Mute 30m'),
+      ],
     );
 
     const iosDetails = DarwinNotificationDetails(

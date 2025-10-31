@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:developer' as developer;
@@ -23,6 +25,28 @@ class MonitorScreen extends StatelessWidget {
             status: state.connectionStatus,
             label: state.connectionLabel,
             onTap: () => _showConnectionSheet(context),
+          ),
+          const SizedBox(height: 12),
+          // Quick add log button
+          Row(
+            children: [
+              FilledButton.icon(
+                onPressed: () => _showAddLogSheet(context),
+                icon: const Icon(Icons.add),
+                label: const Text('Add log'),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: state.careLogs.take(6).map((e) {
+                    final label = _careLabel(e);
+                    return Chip(label: Text(label));
+                  }).toList(),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 20),
           if (state.isMuted)
@@ -112,6 +136,174 @@ class MonitorScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  String _careLabel(CareLogEntry e) {
+    final time = '${e.timestamp.hour.toString().padLeft(2, '0')}:${e.timestamp.minute.toString().padLeft(2, '0')}';
+    switch (e.type) {
+      case CareLogType.feeding:
+        return 'Feed ${e.amount ?? ''} • $time';
+      case CareLogType.diaper:
+        return 'Diaper ${e.note ?? ''} • $time';
+      case CareLogType.sleep:
+        return 'Sleep ${e.amount ?? ''} • $time';
+    }
+  }
+
+  void _showAddLogSheet(BuildContext context) {
+    final state = context.read<BabyMonitorState>();
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) {
+        String? amount;
+        String? note;
+        CareLogType selected = CareLogType.feeding;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+          child: StatefulBuilder(builder: (context, setState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Add log', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    ChoiceChip(label: const Text('Feeding'), selected: selected == CareLogType.feeding, onSelected: (v) => setState(() => selected = CareLogType.feeding)),
+                    const SizedBox(width: 8),
+                    ChoiceChip(label: const Text('Diaper'), selected: selected == CareLogType.diaper, onSelected: (v) => setState(() => selected = CareLogType.diaper)),
+                    const SizedBox(width: 8),
+                    ChoiceChip(label: const Text('Sleep'), selected: selected == CareLogType.sleep, onSelected: (v) => setState(() => selected = CareLogType.sleep)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (selected == CareLogType.feeding)
+                  TextField(
+                    decoration: const InputDecoration(labelText: 'Amount (e.g. 90 ml)'),
+                    onChanged: (v) => amount = v,
+                    keyboardType: TextInputType.text,
+                  ),
+                if (selected == CareLogType.diaper)
+                  TextField(
+                    decoration: const InputDecoration(labelText: 'Note (wet/soiled)'),
+                    onChanged: (v) => note = v,
+                    keyboardType: TextInputType.text,
+                  ),
+                if (selected == CareLogType.sleep)
+                  TextField(
+                    decoration: const InputDecoration(labelText: 'Duration or note'),
+                    onChanged: (v) => amount = v,
+                    keyboardType: TextInputType.text,
+                  ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    FilledButton(
+                      onPressed: () {
+                        state.addCareLog(type: selected, amount: amount, note: note);
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text('Save'),
+                    ),
+                    const SizedBox(width: 12),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          }),
+        );
+      },
+    );
+  }
+}
+
+class _TempSparkline extends StatelessWidget {
+  const _TempSparkline({required this.samples, required this.color, this.minValue, this.maxValue});
+
+  final List<TempSample> samples;
+  final Color color;
+  final double? minValue;
+  final double? maxValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _SparklinePainter(samples: samples, color: color, minValue: minValue, maxValue: maxValue),
+      size: Size.infinite,
+    );
+  }
+}
+
+class _SparklinePainter extends CustomPainter {
+  _SparklinePainter({required this.samples, required this.color, this.minValue, this.maxValue});
+
+  final List<TempSample> samples;
+  final Color color;
+  final double? minValue;
+  final double? maxValue;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round;
+
+    if (samples.isEmpty) return;
+
+    double minT = samples.map((s) => s.temperature).reduce((a, b) => a < b ? a : b);
+    double maxT = samples.map((s) => s.temperature).reduce((a, b) => a > b ? a : b);
+    if (minValue != null) minT = math.min(minT, minValue!);
+    if (maxValue != null) maxT = math.max(maxT, maxValue!);
+    if ((maxT - minT).abs() < 0.1) maxT = minT + 0.1;
+
+    final path = Path();
+    final fillPath = Path();
+
+    for (int i = 0; i < samples.length; i++) {
+      final s = samples[i];
+      final x = (i / (samples.length - 1)).clamp(0.0, 1.0) * size.width;
+      final y = size.height - ((s.temperature - minT) / (maxT - minT)).clamp(0.0, 1.0) * size.height;
+      if (i == 0) {
+        path.moveTo(x, y);
+        fillPath.moveTo(x, size.height);
+        fillPath.lineTo(x, y);
+      } else {
+        path.lineTo(x, y);
+        fillPath.lineTo(x, y);
+      }
+      if (i == samples.length - 1) {
+        fillPath.lineTo(x, size.height);
+        fillPath.close();
+      }
+    }
+
+  // fill under curve
+  final fillPaint = Paint()..color = color.withAlpha((0.12 * 255).round())..style = PaintingStyle.fill;
+    canvas.drawPath(fillPath, fillPaint);
+
+    // line
+    canvas.drawPath(path, paint);
+
+    // last point
+    final last = samples.last;
+    final lastX = size.width;
+    final lastY = size.height - ((last.temperature - minT) / (maxT - minT)).clamp(0.0, 1.0) * size.height;
+    final dotPaint = Paint()..color = color;
+    canvas.drawCircle(Offset(lastX, lastY), 3.0, dotPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SparklinePainter oldDelegate) {
+    return oldDelegate.samples != samples || oldDelegate.color != color || oldDelegate.minValue != minValue || oldDelegate.maxValue != maxValue;
   }
 }
 
@@ -256,6 +448,21 @@ class _TemperatureCardState extends State<TemperatureCard> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                        const SizedBox(height: 8),
+                        // Sparkline showing recent temperature trend
+                        if (widget.state.tempHistory.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6, bottom: 6),
+                            child: SizedBox(
+                              height: 48,
+                              child: _TempSparkline(
+                                samples: widget.state.tempHistory,
+                                color: theme.colorScheme.primary,
+                                minValue: widget.state.comfortMin,
+                                maxValue: widget.state.comfortMax,
+                              ),
+                            ),
+                          ),
                       const SizedBox(height: 8),
                       Text(
                         subtitle,

@@ -29,6 +29,36 @@ class MonitorEvent {
   }
 }
 
+/// Lightweight sample for recent temperature readings.
+class TempSample {
+  TempSample(this.timestamp, this.temperature);
+
+  final DateTime timestamp;
+  final double temperature;
+}
+
+class CryEvent {
+  CryEvent({required this.start, this.end});
+
+  final DateTime start;
+  DateTime? end;
+
+  Duration? get duration => end?.difference(start);
+}
+
+enum CareLogType { feeding, diaper, sleep }
+
+class CareLogEntry {
+  CareLogEntry({required this.timestamp, required this.type, this.note, this.amount});
+
+  final DateTime timestamp;
+  final CareLogType type;
+  final String? note;
+  final String? amount; // e.g., '90 ml' or duration
+}
+
+
+
 class BabyMonitorState extends ChangeNotifier {
   BabyMonitorState() {
     _addEvent('App opened');
@@ -94,6 +124,21 @@ class BabyMonitorState extends ChangeNotifier {
   double? _temperature;
   double? get temperature =>
       _connectionStatus == ConnectionStatus.connected ? _temperature : null;
+
+  // Recent temperature history (in-memory, bounded).
+  final List<TempSample> _tempHistory = <TempSample>[];
+  List<TempSample> get tempHistory => List.unmodifiable(_tempHistory);
+  static const int _maxTempHistory = 2880; // cap samples (approx 24h @ 30s samples)
+
+  // Cry events history
+  final List<CryEvent> _cryEvents = <CryEvent>[];
+  List<CryEvent> get cryEvents => List.unmodifiable(_cryEvents);
+  static const int _maxCryEvents = 200;
+
+  // Care logs (in-memory)
+  final List<CareLogEntry> _careLogs = <CareLogEntry>[];
+  List<CareLogEntry> get careLogs => List.unmodifiable(_careLogs);
+  static const int _maxCareLogs = 500;
 
   TempAlertStatus _tempAlert = TempAlertStatus.ok;
   TempAlertStatus get tempAlert => _tempAlert;
@@ -365,15 +410,14 @@ class BabyMonitorState extends ChangeNotifier {
 
     final String serviceTarget = _serviceUuid.toString().toLowerCase();
 
-    for (final ScanResult result in results) {
-      final String advName = result.advertisementData.advName;
-      final String platformName = result.device.platformName;
-      final String fallbackName = result.advertisementData.localName;
-      final String name = advName.isNotEmpty
-          ? advName
-          : platformName.isNotEmpty
-              ? platformName
-              : (fallbackName ?? '');
+  for (final ScanResult result in results) {
+    final String advName = result.advertisementData.advName;
+    final String platformName = result.device.platformName;
+    final String name = advName.isNotEmpty
+      ? advName
+      : platformName.isNotEmpty
+        ? platformName
+        : '';
 
       final String normalizedName = name.trim().toLowerCase();
       final bool matchesName =
@@ -418,7 +462,7 @@ class BabyMonitorState extends ChangeNotifier {
       );
     } on FlutterBluePlusException catch (error) {
       _addEvent(
-        'Connection failed [${error.errorString}] (code ${error.errorCode})',
+        'Connection failed [${error.description}] (code ${error.code})',
       );
       _device = null;
       _isConnecting = false;
@@ -673,6 +717,20 @@ class BabyMonitorState extends ChangeNotifier {
         _temperature = nextTemp;
         temperatureChanged = true;
         log('BLE: Temperature updated $_temperature °C (changed: $temperatureChanged)', name: 'MonitorState');
+        // Append to temp history (bounded). Avoid overly frequent duplicates.
+        try {
+          final now = DateTime.now();
+          if (_tempHistory.isEmpty ||
+              now.difference(_tempHistory.last.timestamp) >= const Duration(seconds: 30) ||
+              (_tempHistory.last.temperature - nextTemp).abs() >= 0.05) {
+            _tempHistory.add(TempSample(now, nextTemp));
+            if (_tempHistory.length > _maxTempHistory) {
+              _tempHistory.removeRange(0, _tempHistory.length - _maxTempHistory);
+            }
+          }
+        } catch (_) {
+          // Ignore history errors to avoid disrupting state updates.
+        }
       } else {
         log('BLE: Temperature unchanged (diff: ${(_temperature! - nextTemp).abs()})', name: 'MonitorState');
       }
@@ -744,6 +802,14 @@ class BabyMonitorState extends ChangeNotifier {
         _cryStartedAt = cryAgeMs != null
             ? now.subtract(Duration(milliseconds: cryAgeMs))
             : now;
+        // Record structured cry event (start)
+        try {
+          final ev = CryEvent(start: _cryStartedAt!);
+          _cryEvents.insert(0, ev);
+          if (_cryEvents.length > _maxCryEvents) {
+            _cryEvents.removeRange(_maxCryEvents, _cryEvents.length);
+          }
+        } catch (_) {}
         _addEvent('Cry detected');
         log('CRY DETECTED - Attempting to show notification. cryAlertsEnabled=$cryAlertsEnabled, isMuted=$isMuted', 
             name: 'MonitorState');
@@ -762,6 +828,18 @@ class BabyMonitorState extends ChangeNotifier {
         _cryLastEndedAt = cryAgeMs != null
             ? now.subtract(Duration(milliseconds: cryAgeMs))
             : now;
+        // Close the latest cry event if present
+        try {
+          if (_cryEvents.isNotEmpty && _cryEvents.first.end == null) {
+            _cryEvents.first.end = _cryLastEndedAt;
+          } else {
+            // No open event found — insert completed event
+            _cryEvents.insert(0, CryEvent(start: _cryLastEndedAt!, end: _cryLastEndedAt));
+            if (_cryEvents.length > _maxCryEvents) {
+              _cryEvents.removeRange(_maxCryEvents, _cryEvents.length);
+            }
+          }
+        } catch (_) {}
         _addEvent('Cry cleared');
         // Clear cry notification
         unawaited(NotificationService().clearCryAlert());
@@ -770,6 +848,13 @@ class BabyMonitorState extends ChangeNotifier {
     } else {
       if (nextCrying && cryAgeMs != null) {
         _cryStartedAt = now.subtract(Duration(milliseconds: cryAgeMs));
+        // Adjust last open cry event start time if we have recorded one
+        try {
+          if (_cryEvents.isNotEmpty && _cryEvents.first.end == null) {
+            final existing = _cryEvents.first;
+            _cryEvents[0] = CryEvent(start: _cryStartedAt!, end: existing.end);
+          }
+        } catch (_) {}
         // Update ongoing cry notification with duration
         if (cryAlertsEnabled) {
           final duration = now.difference(_cryStartedAt!);
@@ -958,6 +1043,18 @@ class BabyMonitorState extends ChangeNotifier {
       _events.removeLast();
     }
     notifyListeners();
+  }
+
+  /// Add a care log entry (feeding, diaper, sleep). Stored in-memory.
+  void addCareLog({required CareLogType type, String? amount, String? note}) {
+    try {
+      final entry = CareLogEntry(timestamp: DateTime.now(), type: type, note: note, amount: amount);
+      _careLogs.insert(0, entry);
+      if (_careLogs.length > _maxCareLogs) {
+        _careLogs.removeRange(_maxCareLogs, _careLogs.length);
+      }
+      _addEvent('Log added: ${type.name}');
+    } catch (_) {}
   }
 
   String _formatDuration(Duration duration) {

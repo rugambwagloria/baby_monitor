@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/monitor_state.dart';
+import 'settings_screen.dart';
+import 'package:flutter/services.dart';
 
 class TipsScreen extends StatefulWidget {
   const TipsScreen({super.key});
@@ -56,6 +58,25 @@ class _TipsScreenState extends State<TipsScreen>
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat();
+  }
+
+  String _buildShareSummary(BabyMonitorState state) {
+    final buffer = StringBuffer();
+    buffer.writeln('SmartBaby summary — ${DateTime.now()}');
+    buffer.writeln('Connection: ${state.connectionLabel}');
+    final temp = state.temperature;
+    if (temp != null) {
+      buffer.writeln('Current temperature: ${temp.toStringAsFixed(1)} °C');
+    } else {
+      buffer.writeln('Current temperature: --');
+    }
+    final recentCries = state.events.where((e) => DateTime.now().difference(e.timestamp) <= const Duration(hours: 24) && e.message.toLowerCase().contains('cry')).length;
+    buffer.writeln('Cries (24h): $recentCries');
+    buffer.writeln('Recent events:');
+    for (final e in state.events.take(6)) {
+      buffer.writeln('- ${e.formattedTime}: ${e.message}');
+    }
+    return buffer.toString();
   }
 
   @override
@@ -201,6 +222,42 @@ class _TipsScreenState extends State<TipsScreen>
                             ],
                           ),
                         ),
+                          // Recent temperature chart and quick stats
+                          if (state.tempHistory.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Recent temperature', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                                      const SizedBox(height: 8),
+                                      SizedBox(
+                                        height: 120,
+                                        child: _TipsSparklineChart(samples: state.tempHistory, color: theme.colorScheme.primary, minValue: state.comfortMin, maxValue: state.comfortMax),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Builder(builder: (context) {
+                                        final temps = state.tempHistory.map((s) => s.temperature).toList();
+                                        final min = temps.reduce((a, b) => a < b ? a : b);
+                                        final max = temps.reduce((a, b) => a > b ? a : b);
+                                        final avg = temps.reduce((a, b) => a + b) / temps.length;
+                                        return Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text('Min: ${min.toStringAsFixed(1)}°C', style: theme.textTheme.bodyMedium),
+                                            Text('Avg: ${avg.toStringAsFixed(1)}°C', style: theme.textTheme.bodyMedium),
+                                            Text('Max: ${max.toStringAsFixed(1)}°C', style: theme.textTheme.bodyMedium),
+                                          ],
+                                        );
+                                      })
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                         const SizedBox(width: 12),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
@@ -218,6 +275,49 @@ class _TipsScreenState extends State<TipsScreen>
                       ],
                     ),
                     const SizedBox(height: 12),
+                    // Quick actions
+                    Row(
+                      children: [
+                        FilledButton.icon(
+                          onPressed: () {
+                            // Mute 30 minutes
+                            state.setMuteWindow(const Duration(minutes: 30));
+                          },
+                          icon: const Icon(Icons.notifications_off),
+                          label: const Text('Mute 30m'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          onPressed: () {
+                            // Request reconnect
+                            state.requestReconnect();
+                          },
+                          icon: const Icon(Icons.bluetooth_searching),
+                          label: const Text('Reconnect'),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            // Share summary: compose a short text and copy to clipboard
+                            final summary = _buildShareSummary(state);
+                            final messenger = ScaffoldMessenger.of(context);
+                            await Clipboard.setData(ClipboardData(text: summary));
+                            messenger.showSnackBar(const SnackBar(content: Text('Summary copied to clipboard')));
+                          },
+                          icon: const Icon(Icons.share),
+                          label: const Text('Share'),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            // Open settings page modally
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                          },
+                          icon: const Icon(Icons.tune),
+                          label: const Text('Settings'),
+                        ),
+                      ],
+                    ),
                     if (insights['recommendations'] != null &&
                         (insights['recommendations'] as List).isNotEmpty)
                       ...((insights['recommendations'] as List<String>)
@@ -237,6 +337,83 @@ class _TipsScreenState extends State<TipsScreen>
               ),
             ),
           ),
+            // Cry events summary
+          if (state.cryEvents.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Cry activity', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      Text('${state.cryEvents.length} recorded events', style: theme.textTheme.bodyMedium),
+                      const SizedBox(height: 8),
+                      ...state.cryEvents.take(5).map((c) {
+                        final start = c.start;
+                        final formatted = '${start.hour.toString().padLeft(2,'0')}:${start.minute.toString().padLeft(2,'0')}';
+                        final dur = c.duration != null ? _formatDuration(c.duration!) : 'ongoing';
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            children: [
+                              Icon(Icons.graphic_eq, size: 18, color: theme.colorScheme.primary),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text('$formatted — $dur', style: theme.textTheme.bodyMedium)),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Recent care logs
+            if (state.careLogs.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Recent logs', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 8),
+                        ...state.careLogs.take(6).map((e) {
+                          final ts = e.timestamp;
+                          final t = '${ts.hour.toString().padLeft(2,'0')}:${ts.minute.toString().padLeft(2,'0')}';
+                          String label;
+                          switch (e.type) {
+                            case CareLogType.feeding:
+                              label = 'Feeding ${e.amount ?? ''}';
+                              break;
+                            case CareLogType.diaper:
+                              label = 'Diaper ${e.note ?? ''}';
+                              break;
+                            case CareLogType.sleep:
+                              label = 'Sleep ${e.amount ?? ''}';
+                              break;
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              children: [
+                                Icon(Icons.event_note, size: 18, color: theme.colorScheme.primary),
+                                const SizedBox(width: 8),
+                                Expanded(child: Text('$t — $label', style: theme.textTheme.bodyMedium)),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
 
           // Generic tips list
           ..._tips.map((t) => Padding(
@@ -291,6 +468,17 @@ class _TipsScreenState extends State<TipsScreen>
       ),
     );
   }
+
+  String _formatDuration(Duration duration) {
+    if (duration.inHours >= 1) {
+      final hours = duration.inHours;
+      final minutes = duration.inMinutes.remainder(60);
+      if (minutes > 0) return '$hours h $minutes m';
+      return '$hours h';
+    }
+    if (duration.inMinutes >= 1) return '${duration.inMinutes} min';
+    return '${duration.inSeconds} s';
+  }
 }
 
 class _AnimatedBaby extends StatelessWidget {
@@ -329,7 +517,7 @@ class _AnimatedBaby extends StatelessWidget {
                   width: 78,
                   height: 78,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.12),
+                    color: Theme.of(context).colorScheme.primary.withAlpha((0.12 * 255).round()),
                     shape: BoxShape.circle,
                   ),
                   child: Center(
@@ -355,5 +543,87 @@ class _AnimatedBaby extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _TipsSparklineChart extends StatelessWidget {
+  const _TipsSparklineChart({Key? key, required this.samples, required this.color, this.minValue, this.maxValue}) : super(key: key);
+
+  final List<TempSample> samples;
+  final Color color;
+  final double? minValue;
+  final double? maxValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _TipsSparklinePainter(samples: samples, color: color, minValue: minValue, maxValue: maxValue),
+      size: Size.infinite,
+    );
+  }
+}
+
+class _TipsSparklinePainter extends CustomPainter {
+  _TipsSparklinePainter({required this.samples, required this.color, this.minValue, this.maxValue});
+
+  final List<TempSample> samples;
+  final Color color;
+  final double? minValue;
+  final double? maxValue;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (samples.isEmpty) return;
+
+    double minT = samples.map((s) => s.temperature).reduce((a, b) => a < b ? a : b);
+    double maxT = samples.map((s) => s.temperature).reduce((a, b) => a > b ? a : b);
+    if (minValue != null) minT = math.min(minT, minValue!);
+    if (maxValue != null) maxT = math.max(maxT, maxValue!);
+    if ((maxT - minT).abs() < 0.1) maxT = minT + 0.1;
+
+    final path = Path();
+    final fillPath = Path();
+
+    for (int i = 0; i < samples.length; i++) {
+      final s = samples[i];
+      final x = (i / (samples.length - 1)).clamp(0.0, 1.0) * size.width;
+      final y = size.height - ((s.temperature - minT) / (maxT - minT)).clamp(0.0, 1.0) * size.height;
+      if (i == 0) {
+        path.moveTo(x, y);
+        fillPath.moveTo(x, size.height);
+        fillPath.lineTo(x, y);
+      } else {
+        path.lineTo(x, y);
+        fillPath.lineTo(x, y);
+      }
+      if (i == samples.length - 1) {
+        fillPath.lineTo(x, size.height);
+        fillPath.close();
+      }
+    }
+
+  final fillPaint = Paint()..color = color.withAlpha((0.12 * 255).round())..style = PaintingStyle.fill;
+    canvas.drawPath(fillPath, fillPaint);
+
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round;
+    canvas.drawPath(path, paint);
+
+    // draw min/max guideline bands for comfort range if provided
+    if (minValue != null && maxValue != null) {
+      final minY = size.height - ((minValue! - minT) / (maxT - minT)).clamp(0.0, 1.0) * size.height;
+      final maxY = size.height - ((maxValue! - minT) / (maxT - minT)).clamp(0.0, 1.0) * size.height;
+  final bandPaint = Paint()..color = color.withAlpha((0.06 * 255).round())..style = PaintingStyle.fill;
+      final bandRect = Rect.fromLTRB(0, maxY, size.width, minY);
+      canvas.drawRect(bandRect, bandPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TipsSparklinePainter oldDelegate) {
+    return oldDelegate.samples != samples || oldDelegate.color != color || oldDelegate.minValue != minValue || oldDelegate.maxValue != maxValue;
   }
 }

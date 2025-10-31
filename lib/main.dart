@@ -6,6 +6,7 @@ import 'screens/settings_screen.dart';
 import 'screens/tips_screen.dart';
 import 'state/monitor_state.dart';
 import 'theme.dart';
+import 'services/notification_service.dart';
 
 void main() {
   runApp(const SmartBabyApp());
@@ -20,6 +21,17 @@ class SmartBabyApp extends StatelessWidget {
       create: (_) => BabyMonitorState(),
       child: Consumer<BabyMonitorState>(
         builder: (context, state, _) {
+          // Register notification action handler so notifications can trigger app actions
+          NotificationService().setActionHandler((actionId) {
+            switch (actionId) {
+              case 'mute':
+                state.setMuteWindow(const Duration(minutes: 30));
+                break;
+              case 'open':
+                // no-op here; tapping notification will already open the app
+                break;
+            }
+          });
           return MaterialApp(
             title: 'Baby Monitor',
             debugShowCheckedModeBanner: false,
