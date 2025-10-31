@@ -196,147 +196,147 @@ class _TipsScreenState extends State<TipsScreen>
           const SizedBox(height: 18),
 
           // Personalized recommendations based on recent device data
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Personalized advice',
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w800)),
-                              const SizedBox(height: 6),
-                              Text(
-                                insights['summary']!,
-                                style: theme.textTheme.bodyMedium,
-                              ),
-                            ],
-                          ),
-                        ),
-                          // Recent temperature chart and quick stats
-                          if (state.tempHistory.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Card(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(14),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('Recent temperature', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                                      const SizedBox(height: 8),
-                                      SizedBox(
-                                        height: 120,
-                                        child: _TipsSparklineChart(samples: state.tempHistory, color: theme.colorScheme.primary, minValue: state.comfortMin, maxValue: state.comfortMax),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Builder(builder: (context) {
-                                        final temps = state.tempHistory.map((s) => s.temperature).toList();
-                                        final min = temps.reduce((a, b) => a < b ? a : b);
-                                        final max = temps.reduce((a, b) => a > b ? a : b);
-                                        final avg = temps.reduce((a, b) => a + b) / temps.length;
-                                        return Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text('Min: ${min.toStringAsFixed(1)}°C', style: theme.textTheme.bodyMedium),
-                                            Text('Avg: ${avg.toStringAsFixed(1)}°C', style: theme.textTheme.bodyMedium),
-                                            Text('Max: ${max.toStringAsFixed(1)}°C', style: theme.textTheme.bodyMedium),
-                                          ],
-                                        );
-                                      })
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(insights['metricLabel']!,
-                                style: theme.textTheme.labelLarge?.copyWith(
-                                    fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 4),
-                            Text(insights['metricValue']!,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    color: theme.colorScheme.primary)),
-                          ],
-                        )
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    // Quick actions
-                    Row(
-                      children: [
-                        FilledButton.icon(
-                          onPressed: () {
-                            // Mute 30 minutes
-                            state.setMuteWindow(const Duration(minutes: 30));
-                          },
-                          icon: const Icon(Icons.notifications_off),
-                          label: const Text('Mute 30m'),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton.icon(
-                          onPressed: () {
-                            // Request reconnect
-                            state.requestReconnect();
-                          },
-                          icon: const Icon(Icons.bluetooth_searching),
-                          label: const Text('Reconnect'),
-                        ),
-                        const SizedBox(width: 8),
-                        OutlinedButton.icon(
-                          onPressed: () async {
-                            // Share summary: compose a short text and copy to clipboard
-                            final summary = _buildShareSummary(state);
-                            final messenger = ScaffoldMessenger.of(context);
-                            await Clipboard.setData(ClipboardData(text: summary));
-                            messenger.showSnackBar(const SnackBar(content: Text('Summary copied to clipboard')));
-                          },
-                          icon: const Icon(Icons.share),
-                          label: const Text('Share'),
-                        ),
-                        const SizedBox(width: 8),
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            // Open settings page modally
-                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
-                          },
-                          icon: const Icon(Icons.tune),
-                          label: const Text('Settings'),
-                        ),
-                      ],
-                    ),
-                    if (insights['recommendations'] != null &&
-                        (insights['recommendations'] as List).isNotEmpty)
-                      ...((insights['recommendations'] as List<String>)
-                          .map((r) => Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Icon(Icons.arrow_right, size: 18, color: theme.colorScheme.primary),
-                                    const SizedBox(width: 8),
-                                    Expanded(child: Text(r, style: theme.textTheme.bodyMedium)),
-                                  ],
-                                ),
-                              ))),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          // Padding(
+          //   padding: const EdgeInsets.only(bottom: 12),
+          //   child: Card(
+          //     child: Padding(
+          //       padding: const EdgeInsets.all(14),
+          //       child: Column(
+          //         crossAxisAlignment: CrossAxisAlignment.start,
+          //         children: [
+          //           Row(
+          //             crossAxisAlignment: CrossAxisAlignment.start,
+          //             children: [
+          //               Expanded(
+          //                 child: Column(
+          //                   crossAxisAlignment: CrossAxisAlignment.start,
+          //                   children: [
+          //                     Text('Personalized advice',
+          //                         style: theme.textTheme.titleMedium?.copyWith(
+          //                             fontWeight: FontWeight.w800)),
+          //                     const SizedBox(height: 6),
+          //                     Text(
+          //                       insights['summary']!,
+          //                       style: theme.textTheme.bodyMedium,
+          //                     ),
+          //                   ],
+          //                 ),
+          //               ),
+          //                 // Recent temperature chart and quick stats
+          //                 if (state.tempHistory.isNotEmpty)
+          //                   Padding(
+          //                     padding: const EdgeInsets.only(bottom: 12),
+          //                     child: Card(
+          //                       child: Padding(
+          //                         padding: const EdgeInsets.all(14),
+          //                         child: Column(
+          //                           crossAxisAlignment: CrossAxisAlignment.start,
+          //                           children: [
+          //                             Text('Recent temperature', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          //                             const SizedBox(height: 8),
+          //                             SizedBox(
+          //                               height: 120,
+          //                               child: _TipsSparklineChart(samples: state.tempHistory, color: theme.colorScheme.primary, minValue: state.comfortMin, maxValue: state.comfortMax),
+          //                             ),
+          //                             const SizedBox(height: 8),
+          //                             Builder(builder: (context) {
+          //                               final temps = state.tempHistory.map((s) => s.temperature).toList();
+          //                               final min = temps.reduce((a, b) => a < b ? a : b);
+          //                               final max = temps.reduce((a, b) => a > b ? a : b);
+          //                               final avg = temps.reduce((a, b) => a + b) / temps.length;
+          //                               return Row(
+          //                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          //                                 children: [
+          //                                   Text('Min: ${min.toStringAsFixed(1)}°C', style: theme.textTheme.bodyMedium),
+          //                                   Text('Avg: ${avg.toStringAsFixed(1)}°C', style: theme.textTheme.bodyMedium),
+          //                                   Text('Max: ${max.toStringAsFixed(1)}°C', style: theme.textTheme.bodyMedium),
+          //                                 ],
+          //                               );
+          //                             })
+          //                           ],
+          //                         ),
+          //                       ),
+          //                     ),
+          //                   ),
+          //               const SizedBox(width: 12),
+          //               Column(
+          //                 crossAxisAlignment: CrossAxisAlignment.end,
+          //                 children: [
+          //                   Text(insights['metricLabel']!,
+          //                       style: theme.textTheme.labelLarge?.copyWith(
+          //                           fontWeight: FontWeight.w700)),
+          //                   const SizedBox(height: 4),
+          //                   Text(insights['metricValue']!,
+          //                       style: theme.textTheme.titleMedium?.copyWith(
+          //                           fontWeight: FontWeight.w700,
+          //                           color: theme.colorScheme.primary)),
+          //                 ],
+          //               )
+          //             ],
+          //           ),
+          //           const SizedBox(height: 12),
+          //           // Quick actions
+          //           Row(
+          //             children: [
+          //               FilledButton.icon(
+          //                 onPressed: () {
+          //                   // Mute 30 minutes
+          //                   state.setMuteWindow(const Duration(minutes: 30));
+          //                 },
+          //                 icon: const Icon(Icons.notifications_off),
+          //                 label: const Text('Mute 30m'),
+          //               ),
+          //               const SizedBox(width: 8),
+          //               FilledButton.icon(
+          //                 onPressed: () {
+          //                   // Request reconnect
+          //                   state.requestReconnect();
+          //                 },
+          //                 icon: const Icon(Icons.bluetooth_searching),
+          //                 label: const Text('Reconnect'),
+          //               ),
+          //               const SizedBox(width: 8),
+          //               OutlinedButton.icon(
+          //                 onPressed: () async {
+          //                   // Share summary: compose a short text and copy to clipboard
+          //                   final summary = _buildShareSummary(state);
+          //                   final messenger = ScaffoldMessenger.of(context);
+          //                   await Clipboard.setData(ClipboardData(text: summary));
+          //                   messenger.showSnackBar(const SnackBar(content: Text('Summary copied to clipboard')));
+          //                 },
+          //                 icon: const Icon(Icons.share),
+          //                 label: const Text('Share'),
+          //               ),
+          //               const SizedBox(width: 8),
+          //               OutlinedButton.icon(
+          //                 onPressed: () {
+          //                   // Open settings page modally
+          //                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+          //                 },
+          //                 icon: const Icon(Icons.tune),
+          //                 label: const Text('Settings'),
+          //               ),
+          //             ],
+          //           ),
+          //           if (insights['recommendations'] != null &&
+          //               (insights['recommendations'] as List).isNotEmpty)
+          //             ...((insights['recommendations'] as List<String>)
+          //                 .map((r) => Padding(
+          //                       padding: const EdgeInsets.only(bottom: 8),
+          //                       child: Row(
+          //                         crossAxisAlignment: CrossAxisAlignment.start,
+          //                         children: [
+          //                           Icon(Icons.arrow_right, size: 18, color: theme.colorScheme.primary),
+          //                           const SizedBox(width: 8),
+          //                           Expanded(child: Text(r, style: theme.textTheme.bodyMedium)),
+          //                         ],
+          //                       ),
+          //                     ))),
+          //         ],
+          //       ),
+          //     ),
+          //   ),
+          // ),
             // Cry events summary
           if (state.cryEvents.isNotEmpty)
             Padding(
